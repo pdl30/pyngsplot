@@ -1,0 +1,2 @@
+recursive-include pyngsplot *.py
+recursive-include pyrnatools/scripts *.py
