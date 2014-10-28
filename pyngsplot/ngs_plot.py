@@ -11,7 +11,7 @@
 import os, re, sys
 import argparse
 import ConfigParser
-from pyngsplot.scripts import peak_profiles, tss_profiles, metaseq_heatmaps, homer_analysis
+from pyngsplot.tools import peak_profiles, tss_profiles, metaseq_heatmaps, homer_analysis
 import pybedtools
 
 def ConfigSectionMap(section):
@@ -37,7 +37,7 @@ def convert_ucsc_ens(peak, out):
 			output.write("{}\t{}\t{}\n".format(chrom, word[1], word[2])),
 	output.close()
 
-if __name__ == "__main__":
+def main():
 	parser = argparse.ArgumentParser(description='Similar to NGS plot, uses RPM normalisation by default. Plots both heatmaps and average profiles. Do not run in parallel\n')
 	subparsers = parser.add_subparsers(help='Programs included',dest="subparser_name")
 

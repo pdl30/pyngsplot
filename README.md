@@ -9,7 +9,7 @@ $ cd pyngsplot/
 $ python setup.py install --user
 ```
 
-This will install the script pyngsplot.py. For information of optional arguments run:
+This will install the script run_pyngs.py. For information of optional arguments run:
 
 	pyngsplot.py --help
 
