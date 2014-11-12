@@ -9,7 +9,5 @@
 ########################################################################
 
 
-import sys, re, os
-
 import pyngsplot.ngs_plot
 pyngsplot.ngs_plot.main()

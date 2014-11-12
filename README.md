@@ -11,7 +11,7 @@ $ python setup.py install --user
 
 This will install the script run_pyngs.py. For information of optional arguments run:
 
-	run_pyngs.py --help
+	pyngsplot.py --help
 
 For configuration file information, please see the Example_configuration folder
 
