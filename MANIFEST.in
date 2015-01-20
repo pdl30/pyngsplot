@@ -1,2 +1,2 @@
 recursive-include pyngsplot *.py
-recursive-include pyrnatools/scripts *.py
+recursive-include pyngsplot/tools *.gmt
