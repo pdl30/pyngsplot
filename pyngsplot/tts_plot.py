@@ -38,13 +38,8 @@ def ConfigSectionMap(section):
 
 def index_bam(conditions):
 	for key in conditions:
-		name = re.sub(".bam", "", key)
-		c1 = "samtools sort {} {}_sort".format(name)
-		command = "samtools index {}_sort.bam".format(name)
-		subprocess.call(c1.split())
-		subprocess.call(command.split())
-		del(conditions[key])
-		conditions[name]
+		command = "samtools index {}".format(key)
+
 def metaseq_heatmap(conditions, bed, glen, window, threads):
 	#Must figure out how to work with window
 	threads = int(threads)
@@ -97,32 +92,34 @@ def sam_size(ibam):
 	return results
 
 def using_htseq(conditions, bed, glen, w_size, threads, size_dict):
-
+	fragmentsize = 200
 	for key in sorted(conditions):
 		#constant = 1000000/float(size_dict[key])
 		bamfile = HTSeq.BAM_Reader( key )
 		coverage = HTSeq.GenomicArray( "auto", stranded=False, typecode="i" )
 		profile = np.zeros( w_size, dtype='i' )   
-		for p in bed:
+		for i, p in enumerate(bed):
+			diviser = float(size_dict[key])*glen[i]
+			constant = 1e9/diviser
+			#print glen[i], size_dict[key], diviser, 1e-9
 			window = HTSeq.GenomicInterval( p[0], int(p[1]), int(p[2]), "." )
 			for almnt in bamfile[ window ]:
-
+				almnt.iv.length = fragmentsize
 				start_in_window = almnt.iv.start - int(p[1])
 				end_in_window   = almnt.iv.end - int(p[1]) 
 
-			#	print start_in_window, end_in_window, int(p[1]), int(p[2]), almnt.iv.start,almnt.iv.end
 				start_in_window = max( start_in_window, 0 )
 				end_in_window = min( end_in_window, w_size )
 				
 				if start_in_window >= w_size or end_in_window < 0:
 					continue
 
-				print start_in_window, end_in_window
-				profile[ start_in_window : end_in_window ] += 1
-		plt.plot( np.arange( 0, w_size), profile, label=conditions[key])#, color=colors[c])
-		plt.legend(prop={'size':6})
-		plt.savefig("{}.pdf".format(conditions[key]))
+				profile[ start_in_window : end_in_window ] += constant
 
+		plt.plot( np.arange( 0, w_size), profile, label=conditions[key])
+		plt.savefig("{}_tmp.pdf".format(conditions[key]))
+		plt.legend(prop={'size':6})
+	plt.savefig("total_profile.pdf")
 
 def process_bed(ibed, size, ens):
 	bed = ""
