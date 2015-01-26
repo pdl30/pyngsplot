@@ -23,7 +23,7 @@ import numpy as np
 import pkg_resources
 import pysam 
 
-def ConfigSectionMap(section):
+def ConfigSectionMap(Config, section):
 	dict1 = {}
 	options = Config.options(section)
 	for option in options:
@@ -39,6 +39,7 @@ def ConfigSectionMap(section):
 def index_bam(conditions):
 	for key in conditions:
 		command = "samtools index {}".format(key)
+		subprocess.call(command.split())
 
 def metaseq_heatmap(conditions, bed, glen, window, threads):
 	#Must figure out how to work with window
@@ -203,7 +204,7 @@ def main():
 	Config = ConfigParser.ConfigParser()
 	Config.optionxform = str
 	Config.read(args["config"])
-	conditions = ConfigSectionMap("Conditions")
+	conditions = ConfigSectionMap(Config, "Conditions")
 
 	if args["subparser_name"] == "meta":
 		if args["i"]:
