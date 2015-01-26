@@ -97,10 +97,11 @@ def using_htseq(conditions, bed, glen, w_size, threads, size_dict):
 		#constant = 1000000/float(size_dict[key])
 		bamfile = HTSeq.BAM_Reader( key )
 		coverage = HTSeq.GenomicArray( "auto", stranded=False, typecode="i" )
-		profile = np.zeros( w_size, dtype='i' )   
+		profile = np.zeros( w_size, dtype='f')   
 		for i, p in enumerate(bed):
 			diviser = float(size_dict[key])*glen[i]
-			constant = 1e9/diviser
+			constant = 1e9/float(diviser)
+			#print i, diviser, glen[i], size_dict[key], constant
 			#print glen[i], size_dict[key], diviser, 1e-9
 			window = HTSeq.GenomicInterval( p[0], int(p[1]), int(p[2]), "." )
 			for almnt in bamfile[ window ]:
@@ -113,11 +114,10 @@ def using_htseq(conditions, bed, glen, w_size, threads, size_dict):
 				
 				if start_in_window >= w_size or end_in_window < 0:
 					continue
-
+			#	print constant
 				profile[ start_in_window : end_in_window ] += constant
 
-		plt.plot( np.arange( 0, w_size), profile, label=conditions[key])
-		plt.savefig("{}_tmp.pdf".format(conditions[key]))
+		plt.plot( np.arange( -w_size, 0), profile, label=conditions[key])
 		plt.legend(prop={'size':6})
 	plt.savefig("total_profile.pdf")
 
@@ -175,8 +175,8 @@ def convert_ens_ucsc(gtf, out):
 				output.write("{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\n".format(chrom, word[1], word[2], word[3], word[4], word[5], word[6], word[7], word[8])),
 	output.close()
 
-#def main():
-if __name__ == "__main__":
+def main():
+#if __name__ == "__main__":
 	parser = argparse.ArgumentParser(description='Plots 3 prime biases in sequencing long genes.')
 	subparsers = parser.add_subparsers(help='Programs included',dest="subparser_name")
 	metaseq_parser = subparsers.add_parser('meta', help="Metaseq plots")
