@@ -92,8 +92,9 @@ def sam_size(ibam):
 		results[bam] = size
 	return results
 
-def using_htseq(conditions, bed, glen, w_size, threads, size_dict):
+def using_htseq(conditions, bed, glen, w_size, threads, size_dict, outname, outtext):
 	fragmentsize = 200
+	data = {}
 	for key in sorted(conditions):
 		#constant = 1000000/float(size_dict[key])
 		bamfile = HTSeq.BAM_Reader( key )
@@ -105,22 +106,44 @@ def using_htseq(conditions, bed, glen, w_size, threads, size_dict):
 			#print i, diviser, glen[i], size_dict[key], constant
 			#print glen[i], size_dict[key], diviser, 1e-9
 			window = HTSeq.GenomicInterval( p[0], int(p[1]), int(p[2]), "." )
-			for almnt in bamfile[ window ]:
-				almnt.iv.length = fragmentsize
-				start_in_window = almnt.iv.start - int(p[1])
-				end_in_window   = almnt.iv.end - int(p[1]) 
+			try:
+				for almnt in bamfile[ window ]:
+					almnt.iv.length = fragmentsize
+					start_in_window = almnt.iv.start - int(p[1])
+					end_in_window   = almnt.iv.end - int(p[1]) 
 
-				start_in_window = max( start_in_window, 0 )
-				end_in_window = min( end_in_window, w_size )
+					start_in_window = max( start_in_window, 0 )
+					end_in_window = min( end_in_window, w_size )
 				
-				if start_in_window >= w_size or end_in_window < 0:
-					continue
-			#	print constant
-				profile[ start_in_window : end_in_window ] += constant
-
+					if start_in_window >= w_size or end_in_window < 0:
+						continue
+				#	print constant
+					profile[ start_in_window : end_in_window ] += constant
+			except ValueError:
+				pass
 		plt.plot( np.arange( -w_size, 0), profile, label=conditions[key])
-		plt.legend(prop={'size':6})
-	plt.savefig("total_profile.pdf")
+		plt.legend(prop={'size':6}, loc=2)
+		for i,j in enumerate(profile):
+			if i not in data:
+				data[i] = {}
+				data[i][key] = j 
+			else:
+				data[i][key] = j 
+	plt.savefig("{}.pdf".format(outname))
+
+	if outtext:
+		output = open(outtext, "w")
+		output.write("Position"),
+		for key in sorted(conditions):
+			output.write("\t{}".format(key)),
+		output.write("\n"),
+
+		for key1 in sorted(data):
+			output.write("{}".format(key1)),
+			for key2 in sorted(data[key1]):
+				output.write("\t{}".format(data[key1][key2])),
+			output.write("\n"),
+
 
 def process_bed(ibed, size, ens):
 	bed = ""
@@ -195,7 +218,9 @@ def main():
 	htseq_parser.add_argument('-s', '--size', help='Size of downstream region, default=2000', default=2000, required=False)
 	htseq_parser.add_argument('-e', action='store_true', help='Convert ensembl bed file to ucsc format', required=False)
 	htseq_parser.add_argument('-i', action='store_true', help='Will index all input bam files.', required=False)
-	htseq_parser.add_argument('-t', '--threads', help='Threads to use, default=8', default=8, required=False)
+	htseq_parser.add_argument('-p', '--threads', help='Threads to use, default=8', default=8, required=False)
+	htseq_parser.add_argument('-o', '--outname', help='Name of plot', required=True)
+	htseq_parser.add_argument('-t', '--outtext', help='Name of text file, optional', required=False)
 	if len(sys.argv)==1:
 		parser.print_help()
 		sys.exit(1)
@@ -216,4 +241,4 @@ def main():
 			index_bam(conditions)
 		mapped_reads = sam_size(conditions)
 		gtf, glen = process_bed(args["bed"], int(args["size"]), args["e"])
-		using_htseq(conditions, gtf, glen, int(args["size"]), args["threads"], mapped_reads)
+		using_htseq(conditions, gtf, glen, int(args["size"]), args["threads"], mapped_reads, args["outname"], args["outtext"])
