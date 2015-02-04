@@ -21,6 +21,8 @@ import metaseq
 import pybedtools
 import numpy as np
 import pkg_resources
+from multiprocessing import Pool, Manager
+import itertools
 import pysam 
 
 def ConfigSectionMap(Config, section):
@@ -40,6 +42,15 @@ def index_bam(conditions):
 	for key in conditions:
 		command = "samtools index {}".format(key)
 		subprocess.call(command.split())
+
+def check_index(conditions):
+	for key in conditions:
+		index = key + ".bai"
+		if os.path.isfile(index):
+			pass
+		else:
+			command = "samtools index {}".format(key)
+			subprocess.call(command.split())
 
 def metaseq_heatmap(conditions, bed, glen, window, threads):
 	#Must figure out how to work with window
@@ -92,38 +103,51 @@ def sam_size(ibam):
 		results[bam] = size
 	return results
 
-def using_htseq(conditions, bed, glen, w_size, threads, size_dict, outname, outtext):
+def htseq_process(bam, bed, size_dict, w_size, glen, return_dict):
 	fragmentsize = 200
-	data = {}
-	for key in sorted(conditions):
-		#constant = 1000000/float(size_dict[key])
-		bamfile = HTSeq.BAM_Reader( key )
-		coverage = HTSeq.GenomicArray( "auto", stranded=False, typecode="i" )
-		profile = np.zeros( w_size, dtype='f')   
-		for i, p in enumerate(bed):
-			diviser = float(size_dict[key])*glen[i]
-			constant = 1e9/float(diviser)
-			#print i, diviser, glen[i], size_dict[key], constant
-			#print glen[i], size_dict[key], diviser, 1e-9
-			window = HTSeq.GenomicInterval( p[0], int(p[1]), int(p[2]), "." )
-			try:
-				for almnt in bamfile[ window ]:
-					almnt.iv.length = fragmentsize
-					start_in_window = almnt.iv.start - int(p[1])
-					end_in_window   = almnt.iv.end - int(p[1]) 
-
-					start_in_window = max( start_in_window, 0 )
-					end_in_window = min( end_in_window, w_size )
+	bamfile = HTSeq.BAM_Reader( bam )
+	coverage = HTSeq.GenomicArray( "auto", stranded=False, typecode="i" )
+	profile = np.zeros( w_size, dtype='f')   
+	for i, p in enumerate(bed):
+		diviser = float(size_dict[bam])*glen[i]
+		constant = 1e9/float(diviser)
+		#print i, diviser, glen[i], size_dict[key], constant
+		#print glen[i], size_dict[key], diviser, 1e-9
+		window = HTSeq.GenomicInterval( p[0], int(p[1]), int(p[2]), "." )
+		try:
+			for almnt in bamfile[ window ]:
+				almnt.iv.length = fragmentsize
+				start_in_window = almnt.iv.start - int(p[1])
+				end_in_window   = almnt.iv.end - int(p[1]) 
+				start_in_window = max( start_in_window, 0 )
+				end_in_window = min( end_in_window, w_size )
 				
-					if start_in_window >= w_size or end_in_window < 0:
-						continue
-				#	print constant
-					profile[ start_in_window : end_in_window ] += constant
-			except ValueError:
-				pass
-		plt.plot( np.arange( -w_size, 0), profile, label=conditions[key])
+				if start_in_window >= w_size or end_in_window < 0:
+					continue
+				profile[ start_in_window : end_in_window ] += constant
+		except ValueError:
+			pass
+	return_dict[bam] = profile
+
+def htseq_function(args):
+	return htseq_process(*args)
+
+def using_htseq(conditions, bed, glen, w_size, threads, size_dict, outname, outtext):
+	
+	data = {}
+	manager = Manager()
+	return_dict = manager.dict()
+	pool = Pool(int(threads))
+
+	pool.map(htseq_function, itertools.izip(list(conditions.keys()), itertools.repeat(bed), itertools.repeat(size_dict), itertools.repeat(w_size), 
+		itertools.repeat(glen), itertools.repeat(return_dict)))
+ 	pool.close()
+	pool.join()	
+
+	for key in return_dict.keys():
+		plt.plot( np.arange( -w_size, 0), return_dict[key], label=conditions[key])
 		plt.legend(prop={'size':6}, loc=2)
-		for i,j in enumerate(profile):
+		for i,j in enumerate(return_dict[key]):
 			if i not in data:
 				data[i] = {}
 				data[i][key] = j 
@@ -143,7 +167,6 @@ def using_htseq(conditions, bed, glen, w_size, threads, size_dict, outname, outt
 			for key2 in sorted(data[key1]):
 				output.write("\t{}".format(data[key1][key2])),
 			output.write("\n"),
-
 
 def process_bed(ibed, size, ens):
 	bed = ""
@@ -204,7 +227,7 @@ def main():
 	parser = argparse.ArgumentParser(description='Plots 3 prime biases in sequencing long genes.')
 	subparsers = parser.add_subparsers(help='Programs included',dest="subparser_name")
 	metaseq_parser = subparsers.add_parser('meta', help="Metaseq plots")
-	htseq_parser = subparsers.add_parser('htseq', help="HTseq plots")
+	htseq_parser = subparsers.add_parser('htseq', help="HTseq plots") #Have to add multithreading to this!!!
 
 	metaseq_parser.add_argument('-c', '--config', help='''ConfigParser input file with [Conditions]. This contains the output names for the plots. See examples''', required=True)
 	metaseq_parser.add_argument('-b', '--bed', help='Input BED file with gene start and ends', required=True)
@@ -217,7 +240,7 @@ def main():
 	htseq_parser.add_argument('-b', '--bed', help='Input BED file with gene start and ends', required=True)
 	htseq_parser.add_argument('-s', '--size', help='Size of downstream region, default=2000', default=2000, required=False)
 	htseq_parser.add_argument('-e', action='store_true', help='Convert ensembl bed file to ucsc format', required=False)
-	htseq_parser.add_argument('-i', action='store_true', help='Will index all input bam files.', required=False)
+	htseq_parser.add_argument('-i', action='store_true', help='Will index all input bam files.', required=False) #Can do this automatically surely!
 	htseq_parser.add_argument('-p', '--threads', help='Threads to use, default=8', default=8, required=False)
 	htseq_parser.add_argument('-o', '--outname', help='Name of plot', required=True)
 	htseq_parser.add_argument('-t', '--outtext', help='Name of text file, optional', required=False)
@@ -238,7 +261,7 @@ def main():
 		metaseq_heatmap(conditions, gtf, glen, int(args["size"]), args["threads"])
 	elif args["subparser_name"] == "htseq":
 		if args["i"]:
-			index_bam(conditions)
+			check_index(conditions)
 		mapped_reads = sam_size(conditions)
 		gtf, glen = process_bed(args["bed"], int(args["size"]), args["e"])
 		using_htseq(conditions, gtf, glen, int(args["size"]), args["threads"], mapped_reads, args["outname"], args["outtext"])
