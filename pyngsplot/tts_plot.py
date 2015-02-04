@@ -233,14 +233,12 @@ def main():
 	metaseq_parser.add_argument('-b', '--bed', help='Input BED file with gene start and ends', required=True)
 	metaseq_parser.add_argument('-s', '--size', help='Size of downstream region, default=2000', default=2000, required=False)
 	metaseq_parser.add_argument('-e', action='store_true', help='Convert ensembl bed file to ucsc format', required=False)
-	metaseq_parser.add_argument('-i', action='store_true', help='Will index all input bam files.', required=False)
 	metaseq_parser.add_argument('-t', '--threads', help='Threads to use, default=8', default=8, required=False)
 
 	htseq_parser.add_argument('-c', '--config', help='''ConfigParser input file with [Conditions]. This contains the output names for the plots. See examples''', required=True)
 	htseq_parser.add_argument('-b', '--bed', help='Input BED file with gene start and ends', required=True)
 	htseq_parser.add_argument('-s', '--size', help='Size of downstream region, default=2000', default=2000, required=False)
 	htseq_parser.add_argument('-e', action='store_true', help='Convert ensembl bed file to ucsc format', required=False)
-	htseq_parser.add_argument('-i', action='store_true', help='Will index all input bam files.', required=False) #Can do this automatically surely!
 	htseq_parser.add_argument('-p', '--threads', help='Threads to use, default=8', default=8, required=False)
 	htseq_parser.add_argument('-o', '--outname', help='Name of plot', required=True)
 	htseq_parser.add_argument('-t', '--outtext', help='Name of text file, optional', required=False)
@@ -255,13 +253,11 @@ def main():
 	conditions = ConfigSectionMap(Config, "Conditions")
 
 	if args["subparser_name"] == "meta":
-		if args["i"]:
-			index_bam(conditions)
+		check_index(conditions)
 		gtf, glen = process_bed(args["bed"], int(args["size"]), args["e"])
 		metaseq_heatmap(conditions, gtf, glen, int(args["size"]), args["threads"])
 	elif args["subparser_name"] == "htseq":
-		if args["i"]:
-			check_index(conditions)
+		check_index(conditions)
 		mapped_reads = sam_size(conditions)
 		gtf, glen = process_bed(args["bed"], int(args["size"]), args["e"])
 		using_htseq(conditions, gtf, glen, int(args["size"]), args["threads"], mapped_reads, args["outname"], args["outtext"])
