@@ -17,10 +17,11 @@ import multiprocessing
 import metaseq
 import pybedtools
 import numpy as np
+import tempfile
 
 #Changes bed window to custom size
-def change_bed_size(bed, obed, size):
-	output = open(obed, "w")
+def change_bed_size(bed, size, ens):
+	output = tempfile.NamedTemporaryFile(delete=False)
 	with open(bed) as f:
 		for line in f:
 			line = line.rstrip()
@@ -28,15 +29,21 @@ def change_bed_size(bed, obed, size):
 			mid = int(word[2]) - int(word[1])
 			mid = mid/2
 			mid = mid+int(word[1])
-			chrom = word[0].strip("chr")
-			if chrom == "M":
-				chrom = "MT"
+			if ens:
+				chrom = word[0].strip("chr")
+				if chrom == "M":
+					chrom = "MT"
+			else:
+				chrom = word[0]
+
 			to_add = float(size)/2
 			start = int(mid)-to_add
 			end = int(mid)+to_add
 			if start < 0:
 				start = 0
 			output.write("{}\t{}\t{}\n".format(chrom, int(start), int(end))),
+	output.close()
+	return output.name
 
 def read_counts(count):
 	with open(count) as f:
@@ -46,12 +53,13 @@ def read_counts(count):
 		gapdh = int(word[1])
 	return gapdh
 
-def metaseq_heatmap(conditions, bed, counts, window, controls, threads):
+def metaseq_heatmap(conditions, bed, counts, window, controls, threads, name):
 	#Must figure out how to work with window
 #	db = gffutils.create_db(gtf, dbfn='test.db', force=True, keep_order=True, merge_strategy='merge', sort_attribute_values=True)
 	threads = int(threads)
 	fig = plt.figure()
 	ax = fig.add_subplot(111)
+	w_size = float(window)/2
 	for key in sorted(conditions):
 		ip_signal = metaseq.genomic_signal(key, 'bam')
 		# Create arrays in parallel
@@ -73,14 +81,14 @@ def metaseq_heatmap(conditions, bed, counts, window, controls, threads):
 			else:
 				input_array /= input_array.mapped_read_count() / 1e6
 				
-		x = np.linspace(-1000, 1000, 100)
+		x = np.linspace(-w_size, w_size, 100)
 		ax.plot(x, ip_array.mean(axis=0), label=conditions[key])
 		# Add a vertical line at the TSS
 		
 		if controls:
 			ip_array = ip_array - input_array #needs testing, not sure if working
 
-		x = np.linspace(-1000, 1000, 100)
+		x = np.linspace(-w_size, w_size, 100)
 		fig2 = metaseq.plotutils.imshow(ip_array, x=x, figsize=(7, 10),
 		vmin=5, vmax=99,  percentile=True,
 		line_kwargs=dict(color='k', label='All'),
@@ -93,18 +101,18 @@ def metaseq_heatmap(conditions, bed, counts, window, controls, threads):
 		#fig.array_axes.set_xticklabels([])
 		fig2.array_axes.axvline(0, linestyle=':', color='k')
 		fig2.line_axes.axvline(0, linestyle=':', color='k')
-		fig2.savefig('{}_heatmap.png'.format(conditions[key]))
+		fig2.savefig('{}_heatmap_{}.png'.format(conditions[key], name))
 		plt.close(fig2)
 	ax.axvline(0, linestyle=':', color='k')
 	ax.set_xlabel('Distance from Center (bp)')
 	ax.set_ylabel('Average read coverage (per million mapped reads)')
 	ax.legend(loc=1, fancybox=True, framealpha=0.5, prop={'size':7})
-	fig.savefig('Average_profile.png')
+	fig.savefig('Average_profile_{}.png'.format(name))
 	plt.close(fig)
 
-def preprocess_gtf(gtf, gene_filter):
+def preprocess_gtf(gtf, gene_filter, ens):
 	gtffile = HTSeq.GFF_Reader( gtf )
-	output =  open("tmp_meta.bed", "w") 
+	output =  tempfile.NamedTemporaryFile(delete=False)
 	g_filter = {}
 	tsspos = set()
 	if gene_filter:
@@ -123,11 +131,17 @@ def preprocess_gtf(gtf, gene_filter):
 			if feature.type == "exon" and feature.attr["exon_number"] == "1":
 				tsspos.add( feature.iv.start_d_as_pos )
 	for p in tsspos: #Problem if ensembl vs UCSC
+		if ens:
+			chrom = p.chrom
+		else:
+			chrom = 'chr' + p.chrom 
+			if chrom == "chrMT":
+				chrom = "chrM"
 		start = p.pos - 200 
 		end = p.pos + 200
 		if start < 0:
 			start = 0
 		output.write("{}\t{}\t{}\n".format(p.chrom, start, end)),
 	output.close()
-	tss = pybedtools.BedTool("tmp_meta.bed")
+	tss = pybedtools.BedTool(output.name)
 	return tss
